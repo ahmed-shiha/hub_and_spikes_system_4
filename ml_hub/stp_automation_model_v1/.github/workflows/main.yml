@@ -1,0 +1,64 @@
+
+name: Train, Validate, and Stage STP Model
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ml_hub/stp_automation_model_v1/**'
+      - 'ml_hub/medins_ml_utils/**'
+  workflow_dispatch:
+
+env:
+  # In a real CI/CD system, this would be a secure secret
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+        
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ml_hub/medins_ml_utils --no-deps
+          pip install -r ml_hub/stp_automation_model_v1/requirements.txt
+      
+      - name: Run Training Pipeline
+        working-directory: ./ml_hub/stp_automation_model_v1
+        run: python steps/train.py
+        
+  validate:
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+        
+      - name: Set up Python & Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ml_hub/medins_ml_utils --no-deps
+          pip install -r ml_hub/stp_automation_model_v1/requirements.txt
+      
+      - name: Run Validation Quality Gate
+        working-directory: ./ml_hub/stp_automation_model_v1
+        run: python validation/test_model_performance.py
+          
+  promote-to-staging:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote Model to Staging in MLflow
+        if: success()
+        run: |
+          echo "Validation passed. Promoting model to 'Staging' in MLflow Model Registry..."
+          # In a real workflow, this step would use the MLflow client to get the run ID from the
+          # train job and transition the newly registered model's stage to 'Staging'.
+          # Example: mlflow models transition-stage --name stp-automation-model --version <VERSION> --stage Staging

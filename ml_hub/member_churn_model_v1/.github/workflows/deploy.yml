@@ -1,0 +1,36 @@
+
+name: Generate Weekly Retention Worklist (Simulates Airflow DAG)
+on:
+  schedule:
+    - cron: '0 2 * * 1' # Every Monday at 2 AM UTC
+  workflow_dispatch:
+
+jobs:
+  generate-worklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Set up Python & Install Dependencies
+        run: |
+          pip install -e ml_hub/medins_ml_utils --no-deps
+          pip install -r ml_hub/member_churn_model_v1/requirements.txt
+          
+      - name: Promote Latest Staging Model to Production
+        run: |
+          echo "Simulating Airflow Task 1: Promoting latest 'Staging' model to 'Production'..."
+          # In a real Airflow DAG, this ensures the batch job uses the most recently validated model.
+          # mlflow models transition-stage --name member-churn-model --version <VERSION> --stage Production --archive-existing-versions
+
+      - name: Run Worklist Generation Job
+        working-directory: ./ml_hub/member_churn_model_v1
+        run: |
+          echo "Simulating Airflow Task 2: Running the weekly retention worklist generation job..."
+          python deployment/generate_worklist.py
+      
+      - name: Distribute Worklist
+        run: |
+          echo "Simulating Airflow Task 3: Uploading 'retention_worklist.csv' to the CRM system or BI dashboard..."
+          # This step would push the final CSV to a location accessible by the retention team.
+          echo "Distribution simulation complete."

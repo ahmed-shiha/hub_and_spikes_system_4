@@ -1,0 +1,83 @@
+
+name: Train, Validate, and Stage Pricing Models
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ml_hub/actuarial_pricing_model_v5/**'
+      - 'ml_hub/medins_ml_utils/**'
+  workflow_dispatch:
+
+env:
+  # In a real CI/CD system, this would be a secure secret
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.train-models.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install Dependencies
+        run: |
+          pip install -r ml_hub/actuarial_pricing_model_v5/requirements.txt
+          pip install -e ml_hub/medins_ml_utils --no-deps
+      - name: Run Training Pipeline
+        id: train-models
+        working-directory: ./ml_hub/actuarial_pricing_model_v5
+        run: |
+          # The training script logs models and prints the run ID
+          echo "Simulating training run and capturing MLflow run ID..."
+          echo "::set-output name=run_id::placeholder_run_id_\$(date +%s)"
+          python steps/01_data_discovery.py
+          python steps/02_build_abt.py
+          python steps/03_feature_engineering.py
+          python steps/05_gradient_boosting.py
+
+  test:
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python & Install Dependencies
+        run: |
+          pip install -r ml_hub/actuarial_pricing_model_v5/requirements.txt
+          pip install -e ml_hub/medins_ml_utils --no-deps
+      - name: Run Integration Tests
+        working-directory: ./ml_hub/actuarial_pricing_model_v5
+        run: pytest tests/
+
+  validate:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python & Install Dependencies
+        run: |
+          pip install -r ml_hub/actuarial_pricing_model_v5/requirements.txt
+          pip install -e ml_hub/medins_ml_utils --no-deps
+      - name: Run Validation Quality Gates
+        working-directory: ./ml_hub/actuarial_pricing_model_v5
+        env:
+          MLFLOW_RUN_ID: ${{ needs.train.outputs.run_id }}
+        run: |
+          echo "Running automated quality gates on models from run: ${{ env.MLFLOW_RUN_ID }}"
+          python validation/test_model_performance.py
+          python validation/test_model_bias.py
+
+  promote-to-staging:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote Model to Staging in MLflow Registry
+        run: |
+          echo "Validation passed. Promoting newly trained models to 'Staging'..."
+          # This step would use the MLflow client and the run ID from the 'train' job
+          # to find the newly registered models and transition their stage.
+          # Example: mlflow models transition-stage --name pricing-renewal_champion --version <VERSION> --stage Staging
+          echo "Promotion to 'Staging' complete. Ready for manual deployment to Challenger slot."

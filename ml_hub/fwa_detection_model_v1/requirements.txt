@@ -1,0 +1,10 @@
+scikit-learn
+lightgbm
+pandas
+mlflow
+fastapi
+uvicorn
+
+# In a real system, this would point to a private package repository.
+# For this simulation, the user would run 'pip install -e ../medins_ml_utils' first.
+# medins_ml_utils==0.2.0

@@ -1,0 +1,13 @@
+scikit-learn
+lightgbm
+pandas
+numpy
+scipy
+mlflow
+fastapi
+uvicorn
+pytest
+
+# MLOps IN ACTION: Install a specific, versioned release of our shared library
+# In a real system, this would point to a private package repository.
+# medins_ml_utils==0.2.0

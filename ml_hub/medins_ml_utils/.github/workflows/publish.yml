@@ -1,0 +1,40 @@
+name: Test and Publish Python Package
+
+on:
+  push:
+    branches:
+      - main # Trigger on pushes to the main branch
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install the package in editable mode with development extras (like pytest)
+          pip install -e .[dev]
+
+      - name: Run tests with pytest
+        run: |
+          pytest tests/
+
+      - name: Build package
+        if: success() # Only run if tests pass
+        run: python setup.py sdist bdist_wheel
+
+      - name: (SIMULATED) Publish to private repository
+        if: success()
+        run: |
+          echo "Build successful. In a real workflow, this step would use a tool like 'twine' to upload the package."
+          echo "Example command:"
+          echo "twine upload --repository-url <YOUR_PRIVATE_PYPI_URL> dist/* -u <USERNAME> -p <PASSWORD>"

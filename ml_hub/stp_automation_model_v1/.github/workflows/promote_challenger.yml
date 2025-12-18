@@ -1,0 +1,25 @@
+
+name: Analyze and Promote STP Challenger Model
+on:
+  workflow_dispatch:
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Analyze live performance of Challenger vs. Champion
+        run: |
+          echo "Simulating analysis of STP prediction logs..."
+          # In a real workflow, a script would compare the live precision/recall/STP rate
+          # of the Challenger vs. the Champion and generate a report.
+          echo "Analysis complete: Challenger shows a 2% potential increase in STP rate."
+  
+  promote:
+    needs: analyze
+    environment: production # Requires manual approval in GitHub settings
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote Challenger to Champion
+        run: |
+          echo "Promoting the current Staging/Challenger STP model to 'Production' in MLflow..."
+          # Real script would transition stages in MLflow
+          echo "Promotion complete."

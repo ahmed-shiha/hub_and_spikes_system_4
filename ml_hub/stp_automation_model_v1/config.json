@@ -1,0 +1,28 @@
+{
+    "paths": {
+        "data_dir": "../data",
+        "output_dir": "./output"
+    },
+    "tables_to_load": [
+        "F_Claim_Header", "F_Pre_Auth_Header", "F_Claim_Item", "d_product_or_service"
+    ],
+    "snapshot_date": "2025-01-01",
+    "business_logic": {
+        "denial_codes": {
+            "medical_necessity": ["N-DC-045"]
+        }
+    },
+    "model_params": {
+        "objective": "multiclass",
+        "metric": "multi_logloss",
+        "random_state": 42,
+        "n_estimators": 100,
+        "verbose": -1
+    },
+    "validation_thresholds": {
+        "min_accuracy": 0.80,
+        "min_approve_precision": 0.95,
+        "min_deny_precision": 0.95,
+        "bias_disparity_max": 0.15
+    }
+}

@@ -1,0 +1,9 @@
+scikit-learn
+lightgbm
+pandas
+numpy
+mlflow
+shap
+
+# MLOps IN ACTION: Install a specific, versioned release of our shared library
+# medins_ml_utils==0.2.0

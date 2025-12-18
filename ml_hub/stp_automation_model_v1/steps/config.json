@@ -1,0 +1,51 @@
+{
+    "paths": {
+        "data_dir": "../data",
+        "output_dir": "./output"
+    },
+    "tables_to_load": {
+        "data_discovery": [
+            "D_Patient", "F_Claim_Header", "F_Claim_Item", "D_Diagnosis_Code", 
+            "F_CLAIM_CARETEAM", "d_provider"
+        ],
+        "build_abt": [
+            "hidp_v2", "F_Claim_Header", "F_Claim_Item", "D_Diagnosis_Code",
+            "F_CLAIM_CARETEAM", "F_Pre_Auth_Header", "d_product_or_service",
+            "F_Claim_Response_Item", "d_adjudication_reason"
+        ]
+    },
+    "snapshot_date": "2025-01-01",
+    "business_logic": {
+        "chronic_conditions": {
+            "Diabetes": ["E11"],
+            "Hypertension": ["I10"],
+            "Heart Disease": ["I21", "I25"],
+            "Kidney Disease": ["N18"]
+        },
+        "denial_codes": {
+            "medical_necessity": ["N-DC-045"]
+        }
+    },
+    "columns_to_drop": {
+        "id_cols": ["Patient_KEY"],
+        "target_cols": ["annualized_cost"],
+        "raw_list_cols": [
+            "diagnosis_codes_list", "claim_costs_list", "service_dates_list", 
+            "providers_visited_list", "practitioner_specialty_list", 
+            "care_team_roles_list", "pre_auth_outcomes_list", "activity_type_list",
+            "adjudication_reason_list", "self_reported_conditions"
+        ],
+        "date_cols": ["issuedate", "policyexpirydate", "snapshot_date", "createdon"]
+    },
+    "lgbm_params": {
+        "objective": "regression_l1",
+        "metric": "mae",
+        "random_state": 42,
+        "n_estimators": 150,
+        "verbose": -1
+    },
+    "validation_thresholds": {
+        "performance_improvement_pct": -0.02,
+        "bias_disparity_max": 0.15
+    }
+}

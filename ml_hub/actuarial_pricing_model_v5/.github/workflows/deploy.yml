@@ -1,0 +1,19 @@
+name: Deploy Pricing Model Challenger
+on:
+  workflow_dispatch:
+    inputs:
+      model_run_id:
+        description: 'MLflow Run ID of the model to deploy as Challenger'
+        required: true
+jobs:
+  deploy-challenger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy new model version as Challenger
+        run: |
+          echo "Deploying model from run ${{ github.event.inputs.model_run_id }} as the new Challenger..."
+          # In a real system, this would:
+          # 1. Transition the specified model version to a 'Challenger' stage in MLflow.
+          # 2. Trigger a rolling restart of the production API service.
+          # 3. The API's startup logic would then automatically load this new 'Challenger' model.
+          echo "Deployment simulation complete."

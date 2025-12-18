@@ -1,0 +1,39 @@
+
+name: Run Weekly Provider Scoring Job (Simulates Airflow DAG)
+on:
+  schedule:
+    - cron: '0 1 * * 1' # Every Monday at 1 AM UTC
+  workflow_dispatch:
+
+jobs:
+  score-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+        
+      - name: Set up Python & Install Dependencies
+        run: |
+          pip install -e ml_hub/medins_ml_utils --no-deps
+          pip install -r ml_hub/network_value_model_v1/requirements.txt
+
+      - name: Promote Latest Staging Model to Production
+        run: |
+          echo "Simulating Airflow Task 1: Promote Latest 'Staging' model to 'Production'..."
+          # In a real Airflow DAG, this would be a PythonOperator calling the MLflow client
+          # to ensure the batch job uses the most recently validated model.
+          # mlflow models transition-stage --name network-value-model --version <LATEST_STAGING_VERSION> --stage Production --archive-existing-versions
+          
+      - name: Run Batch Scoring Job
+        working-directory: ./ml_hub/network_value_model_v1
+        run: |
+          echo "Simulating Airflow Task 2: Running the weekly provider scoring job..."
+          python deployment/score_providers.py
+          echo "Scoring complete. Results are in output/provider_value_tiers.csv"
+      
+      - name: Upload Results to Data Warehouse
+        run: |
+          echo "Simulating Airflow Task 3: Uploading 'provider_value_tiers.csv' to the Data Warehouse..."
+          # In a real workflow, this step would use a tool like dbt or a direct DB connection
+          # to upload and merge the results into a production table for BI tools.
+          echo "Upload simulation complete."

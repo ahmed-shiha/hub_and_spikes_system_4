@@ -1,0 +1,33 @@
+
+name: Monitor Production Models & Report Value
+on:
+  schedule:
+    # Run at 8 AM UTC every day
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install Dependencies
+        run: |
+          pip install -r ml_hub/actuarial_pricing_model_v5/requirements.txt
+          pip install -e ml_hub/medins_ml_utils --no-deps
+          
+      - name: Run Production Monitoring & Value Reporting Scripts
+        working-directory: ./ml_hub/actuarial_pricing_model_v5
+        run: |
+          echo "--- Running Production Drift Checks ---"
+          # In a real system, this might first download the latest prediction logs from a central store
+          python monitoring/check_production_drift.py
+          echo "\n--- Building Business Value Dashboard Report ---"
+          python monitoring/build_business_value_dashboard.py

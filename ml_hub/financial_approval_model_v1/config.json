@@ -1,0 +1,15 @@
+{
+    "project_name": "financial_approval_model_v1",
+    "paths": {
+        "data_dir": "../data",
+        "output_dir": "output"
+    },
+    "model_params": {
+        "objective": "binary",
+        "metric": "auc",
+        "learning_rate": 0.05
+    },
+    "validation_thresholds": {
+        "min_auc": 0.80
+    }
+}

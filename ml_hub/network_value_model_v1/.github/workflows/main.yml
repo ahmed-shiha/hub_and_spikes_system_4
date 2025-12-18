@@ -1,0 +1,24 @@
+name: Train, Validate, and Stage Network Value Model
+on: [workflow_dispatch]
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+jobs:
+  train-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python & Install Dependencies
+        run: |
+          pip install -e ml_hub/medins_ml_utils --no-deps
+          pip install -r ml_hub/network_value_model_v1/requirements.txt
+      - name: Run Training Pipeline
+        working-directory: ./ml_hub/network_value_model_v1
+        run: python steps/train.py
+      - name: Run Validation Quality Gate
+        working-directory: ./ml_hub/network_value_model_v1
+        run: python validation/test_cluster_separation.py
+      - name: Promote Model to Staging
+        if: success()
+        run: |
+          echo "Validation passed. Promoting model to 'Staging'..."
+          # mlflow models transition-stage --name network-value-model --version <VERSION> --stage Staging

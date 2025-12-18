@@ -1,0 +1,52 @@
+name: Train, Validate, and Stage FWA Model
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ml_hub/fwa_detection_model_v1/**'
+      - 'ml_hub/medins_ml_utils/**'
+  workflow_dispatch:
+
+env:
+  # In a real CI/CD system, this would be a secure secret
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
+jobs:
+  train-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+        
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # First, install the shared library from the local path
+          pip install -e ml_hub/medins_ml_utils --no-deps
+          # Then, install the project-specific requirements
+          pip install -r ml_hub/fwa_detection_model_v1/requirements.txt
+      
+      - name: Run Unsupervised Model (to generate worklist)
+        working-directory: ./ml_hub/fwa_detection_model_v1
+        run: python steps/01_unsupervised_model.py
+        
+      - name: Run Supervised Retraining (and register to MLflow)
+        working-directory: ./ml_hub/fwa_detection_model_v1
+        run: python steps/02_supervised_retraining.py
+        
+      - name: Run Validation Quality Gate
+        working-directory: ./ml_hub/fwa_detection_model_v1
+        run: python validation/test_model_performance.py
+          
+      - name: Promote Model to Staging in MLflow
+        if: success()
+        run: |
+          echo "Validation passed. Promoting model to 'Staging' in MLflow Model Registry..."
+          # In a real workflow, this step would use the MLflow client to get the run ID from the
+          # previous step and transition the newly registered model's stage to 'Staging'.
+          # Example: mlflow models transition-stage --name fwa-detection-model --version <VERSION> --stage Staging

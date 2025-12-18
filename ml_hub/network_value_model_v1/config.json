@@ -1,0 +1,19 @@
+{
+    "paths": {
+        "data_dir": "../data",
+        "output_dir": "./output"
+    },
+    "tables_to_load": ["F_Claim_Header"],
+    "model_params": {
+        "n_clusters": 3,
+        "random_state": 42
+    },
+    "cluster_labels": {
+        "0": "Bronze",
+        "1": "Silver",
+        "2": "Gold"
+    },
+    "validation_thresholds": {
+        "min_silhouette_score": 0.3
+    }
+}

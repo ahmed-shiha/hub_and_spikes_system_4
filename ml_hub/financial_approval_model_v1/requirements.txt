@@ -1,0 +1,6 @@
+# medins_ml_utils==0.2.0
+pyspark
+lightgbm
+pandas
+numpy
+mlflow

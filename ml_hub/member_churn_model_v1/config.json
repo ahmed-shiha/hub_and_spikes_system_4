@@ -1,0 +1,16 @@
+{
+    "paths": {
+        "data_dir": "../data",
+        "output_dir": "./output",
+        "pricing_model_output_dir": "../../actuarial_pricing_model_v5/steps/output"
+    },
+    "model_params": {
+        "objective": "binary",
+        "metric": "binary_logloss",
+        "random_state": 42,
+        "n_estimators": 100
+    },
+    "validation_thresholds": {
+        "min_f1_score": 0.6
+    }
+}

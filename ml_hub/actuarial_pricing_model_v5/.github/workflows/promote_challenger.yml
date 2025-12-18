@@ -1,0 +1,28 @@
+name: Analyze and Promote Challenger Model
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python & Install Dependencies...
+      - name: Analyze live performance of Challenger vs. Champion
+        working-directory: ./ml_hub/actuarial_pricing_model_v5
+        run: python analysis/analyze_challenger.py
+  
+  promote:
+    needs: analyze
+    # This job has a manual approval gate before it runs
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote Challenger to Champion
+        run: |
+          echo "Promoting the current Staging/Challenger model to 'Production' in MLflow..."
+          # This step would use the MLflow client:
+          # 1. Archive the current 'Production' model.
+          # 2. Transition the 'Staging' model to 'Production'.
+          # The live API would automatically pick up the new Champion on its next refresh.
+          echo "Promotion complete."

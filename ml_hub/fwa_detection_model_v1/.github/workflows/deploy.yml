@@ -1,0 +1,21 @@
+
+name: Deploy FWA Model Challenger
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: 'MLflow Model Version to deploy as Challenger'
+        required: true
+jobs:
+  deploy-challenger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote Model to Challenger (Staging)
+        run: |
+          echo "Promoting FWA model version ${{ github.event.inputs.model_version }} to 'Staging'..."
+          # Real command: mlflow models transition-stage --name="fwa-detection-model" --version="${{ github.event.inputs.model_version }}" --stage="Staging"
+      - name: Trigger Production API Rolling Restart
+        run: |
+          echo "Triggering a rolling restart of the FWA API service..."
+          # The restarted API will automatically load the new 'Staging' model as the Challenger.
+          echo "Deployment simulation complete."
