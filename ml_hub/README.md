@@ -23,3 +23,11 @@ Each ML model gets its own project folder, which acts as a "spoke". These spokes
 -   **`member_churn_model_v1/`:** A classification model to predict member churn, consuming operational metrics from the STP system as "friction features".
 
 This architecture promotes code reuse, consistency, and independent model development and deployment.
+
+## 3. Testing
+
+This project uses `pytest` for unit testing. To run the tests, simply run the following command from the root of the project:
+
+```bash
+pytest
+```

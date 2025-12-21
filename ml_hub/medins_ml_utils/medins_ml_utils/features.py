@@ -6,6 +6,7 @@ from pyspark.sql.types import FloatType, IntegerType, ArrayType, StringType
 import pyspark.sql.functions as F
 import ast
 import numpy as np
+import itertools
 
 # --- Helper UDFs (only used when native functions are too complex) ---
 # Note: In a true Big Data environment, we'd avoid UDFs or use Pandas UDFs (Arrow) for performance.
@@ -27,46 +28,57 @@ safe_eval_udf = udf(safe_literal_eval, ArrayType(StringType()))
 def create_onboarding_features(df: DataFrame, artifacts: dict) -> DataFrame:
     """Creates features for new business applicants with limited data."""
     logging.info("Creating onboarding features using Spark...")
-    
-    # In Spark, we assume 'self_reported_conditions' is already an ArrayType via ingestion schema 
-    # or transformation. If it's a string, we'd need to parse it.
-    # Assuming it is ArrayType(StringType).
 
-    cost_weights = artifacts['chronic_condition_cost_weights']
-    freq_weights = artifacts['chronic_condition_freq_weights']
-    
-    # Broadcast artifacts if they were large, but dicts are small here.
-    
-    # Calculate score using UDF because of the dictionary lookup logic which is hard in pure SQL
-    # unless we explode and join. For "millions", explode/join is better. 
-    # Let's try to stick to UDF for logic preservation simplicity unless performance critical.
-    
-    @udf(FloatType())
-    def calculate_self_reported_score(conditions):
-        if not conditions:
-            return 0.0
-        score = 0.0
-        for cond in conditions:
-            cost_w = cost_weights.get(cond, 1.0)
-            freq_w = freq_weights.get(cond, 1.0)
-            score += (cost_w + freq_w) / 2.0
-        return score
+    cost_weights = artifacts.get('chronic_condition_cost_weights', {})
+    freq_weights = artifacts.get('chronic_condition_freq_weights', {})
 
-    df_out = df.withColumn('self_reported_chronic_score', calculate_self_reported_score(col('self_reported_conditions')))
-    
-    # One-Hot Encoding
-    # In Spark, typically use StringIndexer + OneHotEncoder. 
-    # For simplicity in this "Pandas Replacement" plan, we can use pivot/conditional columns if cardinality is low.
-    # Or keep it as strings and let LightGBM handle it (LightGBM handles categories natively).
-    # But the prompt asks to replicate the features.
-    # Let's assume downstream LightGBM handles categories or we just pass the raw cols.
-    # The original code did get_dummies. 
-    # We will SKIP get_dummies here and assume the model pipeline handles categorical encoding (which is better practice).
-    # BUT, to match the "feature engineering" output expectation, let's implement a simple version if needed.
-    # Actually, LightGBM in Spark (Synapse) or sklearn handles categories. 
-    # Let's just return the numeric feature.
-    
+    # For performance, avoid UDFs. Use native Spark functions.
+    # The best approach is to convert dicts to Spark maps and use a SQL expression.
+    if not cost_weights or not freq_weights:
+        df_out = df.withColumn('self_reported_chronic_score', lit(0.0))
+    else:
+        # Create map literals for joining/lookup within the DataFrame context
+        cost_map = F.create_map([F.lit(x) for x in itertools.chain.from_iterable(cost_weights.items())])
+        freq_map = F.create_map([F.lit(x) for x in itertools.chain.from_iterable(freq_weights.items())])
+
+        # Use a Spark SQL expression for transforming the array of conditions into an array of scores, then summing.
+        # This is highly performant and avoids expensive UDFs or explodes.
+        score_expr = f"""
+        aggregate(
+            transform(self_reported_conditions, c ->
+                (coalesce({cost_map._jc.toString()}[c], 1.0) + coalesce({freq_map._jc.toString()}[c], 1.0)) / 2.0
+            ),
+            0.0,
+            (acc, val) -> acc + val
+        )
+        """
+
+        # Ensure the column exists and handle nulls before applying the expression
+        df_with_conditions = df.withColumn(
+            'self_reported_conditions',
+            F.when(col('self_reported_conditions').isNull(), F.array()).otherwise(col('self_reported_conditions'))
+        )
+
+        df_with_maps = df_with_conditions.withColumn("cost_map", cost_map).withColumn("freq_map", freq_map)
+
+        df_out = df_with_maps.withColumn(
+            'self_reported_chronic_score',
+            F.expr(score_expr)
+        )
+
     df_out = df_out.withColumn('age_x_chronic_score', col('age') * col('self_reported_chronic_score'))
+    
+    # Add a new feature for demographic risk
+    location_risk_map = F.create_map([
+        F.lit('urban'), F.lit(1.2),
+        F.lit('suburban'), F.lit(1.0),
+        F.lit('rural'), F.lit(0.9)
+    ])
+    
+    df_out = df_out.withColumn(
+        'demographic_risk_score',
+        (col('age') / 100.0) * F.coalesce(location_risk_map[col('location')], 1.0)
+    )
     
     return df_out
 
@@ -74,30 +86,61 @@ def create_renewal_vice_champion_features(df: DataFrame, artifacts: dict) -> Dat
     """Creates all advanced features EXCEPT provider-specific ones."""
     logging.info("Creating renewal vice-champion features using Spark...")
     
-    cost_weights = artifacts['chronic_condition_cost_weights']
-    freq_weights = artifacts['chronic_condition_freq_weights']
-    chronic_defs = artifacts['chronic_conditions_definitions']
+    cost_weights = artifacts.get('chronic_condition_cost_weights', {})
+    freq_weights = artifacts.get('chronic_condition_freq_weights', {})
+    chronic_defs = artifacts.get('chronic_conditions_definitions', {})
 
-    # Logic: diagnosis_codes_list -> check against chronic_defs -> lookup weights -> avg
+    # Create maps for efficient lookups
+    cost_map = F.create_map([F.lit(x) for x in itertools.chain.from_iterable(cost_weights.items())])
+    freq_map = F.create_map([F.lit(x) for x in itertools.chain.from_iterable(freq_weights.items())])
     
-    @udf(FloatType())
-    def calculate_renewal_chronic_score(diags):
-        if not diags: return 0.0
-        score = 0.0
-        unique_conditions_found = set()
-        for diag_code in diags:
-            if not diag_code: continue
-            for cond, codes in chronic_defs.items():
-                if any(str(diag_code).startswith(c) for c in codes):
-                    unique_conditions_found.add(cond)
-        
-        for cond in unique_conditions_found:
-            cost_w = cost_weights.get(cond, 1.0)
-            freq_w = freq_weights.get(cond, 1.0)
-            score += (cost_w + freq_w) / 2.0
-        return score
+    # This is a complex transformation. We'll build a mapping from diagnosis prefixes to condition names.
+    # To do this efficiently in Spark, we can create a series of `when` clauses.
 
-    df_out = df.withColumn('data_driven_risk_score', calculate_renewal_chronic_score(col('diagnosis_codes_list')))
+    # Flatten the chronic_defs for easier processing
+    diag_to_cond_list = []
+    for cond, codes in chronic_defs.items():
+        for code in codes:
+            diag_to_cond_list.append((code, cond))
+
+    # Build the CASE WHEN expression for mapping diagnosis to condition
+    map_expr = F.create_map([F.lit(x) for x in itertools.chain.from_iterable(diag_to_cond_list)])
+
+    # UDF to resolve diagnosis to a chronic condition. While we aim to avoid UDFs,
+    # the string matching logic `startswith` is complex to vectorize perfectly without one.
+    # A Pandas UDF would be the next step up in a real-world scenario.
+    @udf(ArrayType(StringType()))
+    def map_diags_to_conditions(diag_codes):
+        if not diag_codes:
+            return []
+        found_conditions = set()
+        for diag in diag_codes:
+            if not diag:
+                continue
+            for cond, prefixes in chronic_defs.items():
+                if any(diag.startswith(prefix) for prefix in prefixes):
+                    found_conditions.add(cond)
+        return list(found_conditions)
+
+    df_with_conditions = df.withColumn(
+        'chronic_conditions_list',
+        map_diags_to_conditions(col('diagnosis_codes_list'))
+    )
+
+    # Now calculate score based on the mapped conditions, similar to the onboarding logic
+    score_expr = f"""
+    aggregate(
+        transform(chronic_conditions_list, c ->
+            (coalesce({cost_map._jc.toString()}[c], 1.0) + coalesce({freq_map._jc.toString()}[c], 1.0)) / 2.0
+        ),
+        0.0,
+        (acc, val) -> acc + val
+    )
+    """
+
+    df_with_maps = df_with_conditions.withColumn("cost_map", cost_map).withColumn("freq_map", freq_map)
+
+    df_out = df_with_maps.withColumn('data_driven_risk_score', F.expr(score_expr))
 
     # Cost Volatility (IQR) - Hard to do per-row in Spark without UDF or complex Array functions (Spark 3.1+ has percentile_approx)
     # We'll use a UDF for row-wise array statistics.
